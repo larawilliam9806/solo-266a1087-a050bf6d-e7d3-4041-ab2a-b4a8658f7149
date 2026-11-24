@@ -93,18 +93,23 @@ def _merge_components(conn: sqlite3.Connection, c1: int, c2: int) -> int:
 
 
 def _split_after_withdrawal(
-    conn: sqlite3.Connection, a: str, b: str, members: list[str]
+    conn: sqlite3.Connection, a: str, b: str, component_id: int
 ) -> bool:
     """撤回边 (a, b) 后检查原分量是否分裂。
+
+    只读取两端都在原分量内的有效判定，用分量号定位（固定参数个数），
+    不把成员铺成 ``IN (...)`` 参数列表；分量再大也不会触碰 SQLite
+    参数上限，也不会去扫描无关分量。
 
     仅在原分量成员范围内做 BFS；若 a 到 b 不再连通，把 a 所在侧迁往新分量。
     返回是否发生了分裂。
     """
-    placeholders = ",".join("?" * len(members))
     edges = conn.execute(
-        f"SELECT scan_a, scan_b FROM same_page_edges "
-        f"WHERE active = 1 AND scan_a IN ({placeholders}) AND scan_b IN ({placeholders})",
-        (*members, *members),
+        "SELECT e.scan_a, e.scan_b FROM same_page_edges e "
+        "JOIN scan_components ca ON ca.scan_id = e.scan_a "
+        "JOIN scan_components cb ON cb.scan_id = e.scan_b "
+        "WHERE e.active = 1 AND ca.component_id = ? AND cb.component_id = ?",
+        (component_id, component_id),
     ).fetchall()
     adjacency: dict[str, list[str]] = {}
     for e in edges:
@@ -268,7 +273,7 @@ def withdraw_same_page(conn: sqlite3.Connection, evidence_id: str) -> bool:
     comp = _component_of(conn, row["scan_a"])
     if comp is not None:
         members = _component_members(conn, comp)
-        if _split_after_withdrawal(conn, row["scan_a"], row["scan_b"], members):
+        if _split_after_withdrawal(conn, row["scan_a"], row["scan_b"], comp):
             # 分量分裂后，原分量两侧的评测件冲突都可能变化
             _recompute_conflicts(conn, members)
     return True

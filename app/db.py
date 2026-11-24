@@ -38,6 +38,10 @@ CREATE TABLE IF NOT EXISTS same_page_edges (
     created_at   TEXT NOT NULL,
     withdrawn_at TEXT
 );
+-- 撤回后按「原分量」核对是否拆组时，用分量号定位相关判定，
+-- 不把分量成员铺成参数列表（分量再大也只用固定几个参数）。
+CREATE INDEX IF NOT EXISTS idx_same_page_edges_a ON same_page_edges(scan_a);
+CREATE INDEX IF NOT EXISTS idx_same_page_edges_b ON same_page_edges(scan_b);
 
 -- 已发布的评测清单
 CREATE TABLE IF NOT EXISTS manifests (
